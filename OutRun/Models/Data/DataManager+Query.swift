@@ -65,6 +65,26 @@ extension DataManager {
         return queryObject(from: \._uuid == uuid, transaction: transaction)
     }
     
+    public static func syncQueryObject<ObjectType: ORDataType>(from anyObject: ORDataInterface, transaction: SynchronousDataTransaction? = nil) -> ObjectType? {
+        
+        return syncQueryObject(from: anyObject.uuid, transaction: transaction)
+    }
+    
+    public static func syncQueryObject<ObjectType: ORDataType>(from uuid: UUID?, transaction: SynchronousDataTransaction? = nil) -> ObjectType? {
+        
+        guard let uuid = uuid else {
+            return nil
+        }
+        
+        return syncQueryObject(from: \._uuid == uuid, transaction: transaction)
+    }
+    
+    public static func syncQueryObject<ObjectType: ORDataType>(from whereClause: Where<ObjectType>, transaction: SynchronousDataTransaction? = nil) -> ObjectType? {
+        
+        let object = try? (transaction as FetchableSource? ?? dataStack).fetchOne(From<ObjectType>().where(whereClause))
+        return object
+    }
+    
     /**
      Queries an object comforming to `ORDataType` with the provided object's uuid from the database.
      - parameter anyObject: any object representing the wanted database object to be returned
@@ -161,19 +181,27 @@ extension DataManager {
         for workout: ORWorkoutInterface,
         completion: @escaping (WorkoutStats?) -> Void
     ) {
-        dataStack.perform(asynchronous: { (transaction) -> WorkoutStats? in
-            
-            guard let workout: Workout = queryObject(from: workout, transaction: transaction) else { return nil }
-            return WorkoutStats(workout: workout)
-            
-        }) { (result) in
-            switch result {
-            case .success(let stats):
-                completion(stats)
-            case .failure:
-                completion(nil)
-            }
-        }
+        
+        //        do {
+        //            try dataStack.perform(synchronous: { (transaction) -> WorkoutStats? in
+        //                guard let workout: Workout = syncQueryObject(from: workout, transaction: transaction) else {return nil}
+        //                print("dataStack perform synchronous finish")
+        //                let result = WorkoutStats(workout: workout)
+        //                completion(result)
+        //                return result
+        //
+        //            }, waitForAllObservers: false)
+        //        } catch let error {
+        //            print("waitForAllObservers:",error.localizedDescription)
+        //        }
+        
+//        let object = try? (transaction as FetchableSource? ?? dataStack).fetchOne(From<ObjectType>().where(whereClause))
+
+        
+        let fetchRes = try? dataStack.fetchOne(From<Workout>().where(\._uuid == workout.uuid))
+        guard let workout: Workout = fetchRes else {return}
+        let stats = WorkoutStats(workout: workout)
+        completion(stats)
     }
     
     // MARK: - Sectioned Metrics
@@ -194,42 +222,69 @@ extension DataManager {
         completion: @escaping (WorkoutStatsSeries<Bool, MetricType, SampleType.Element>) -> Void
     ) where SampleType.Element: ORSampleInterface {
         
-        dataStack.perform(asynchronous: { (transaction) -> WorkoutStatsSeries<Bool, MetricType, SampleType.Element> in
+        
+        let fetchRes = try? dataStack.fetchOne(From<Workout>().where(\._uuid == workout.uuid))
+        guard let workout: Workout = fetchRes else {return}
+        var objects: [WorkoutStatsSeries<Bool, MetricType, SampleType.Element>.RawSection] = []
+        var currentlyPaused = false
+        var currentData = [(timestamp: TimeInterval, value: MetricType, object: SampleType.Element?)]()
+        
+        for sample in workout[keyPath: samplesPath] {
             
-            guard let workout: Workout = queryObject(from: workout, transaction: transaction) else {
-                return []
-            }
-            
-            var objects: [WorkoutStatsSeries<Bool, MetricType, SampleType.Element>.RawSection] = []
-            var currentlyPaused = false
-            var currentData = [(timestamp: TimeInterval, value: MetricType, object: SampleType.Element?)]()
-            
-            for sample in workout[keyPath: samplesPath] {
-                
-                if currentlyPaused != workout.pauses.contains(where: { $0.contains(sample.timestamp) }) {
-                    if !currentData.isEmpty {
-                        objects.append((currentlyPaused, currentData))
-                    }
-                    currentlyPaused.toggle()
+            if currentlyPaused != workout.pauses.contains(where: { $0.contains(sample.timestamp) }) {
+                if !currentData.isEmpty {
+                    objects.append((currentlyPaused, currentData))
                 }
-                currentData.append((
-                    timestamp: sample.timestamp.distance(to: workout.startDate),
-                    value: sample[keyPath: metricPath],
-                    object: includeSamples ? sample : nil
-                ))
+                currentlyPaused.toggle()
             }
-            
-            objects.append((currentlyPaused, currentData))
-            return WorkoutStatsSeries(sections: objects)
-            
-        }) { (result) in
-            switch result {
-            case .success(let series):
-                completion(series)
-            case .failure:
-                completion([])
-            }
+            currentData.append((
+                timestamp: sample.timestamp.distance(to: workout.startDate),
+                value: sample[keyPath: metricPath],
+                object: includeSamples ? sample : nil
+            ))
         }
+        
+        objects.append((currentlyPaused, currentData))
+        let series = WorkoutStatsSeries(sections: objects)
+        completion(series)
+        
+        
+//        dataStack.perform(asynchronous: { (transaction) -> WorkoutStatsSeries<Bool, MetricType, SampleType.Element> in
+//
+//            guard let workout: Workout = queryObject(from: workout, transaction: transaction) else {
+//                return []
+//            }
+//
+//            var objects: [WorkoutStatsSeries<Bool, MetricType, SampleType.Element>.RawSection] = []
+//            var currentlyPaused = false
+//            var currentData = [(timestamp: TimeInterval, value: MetricType, object: SampleType.Element?)]()
+//
+//            for sample in workout[keyPath: samplesPath] {
+//
+//                if currentlyPaused != workout.pauses.contains(where: { $0.contains(sample.timestamp) }) {
+//                    if !currentData.isEmpty {
+//                        objects.append((currentlyPaused, currentData))
+//                    }
+//                    currentlyPaused.toggle()
+//                }
+//                currentData.append((
+//                    timestamp: sample.timestamp.distance(to: workout.startDate),
+//                    value: sample[keyPath: metricPath],
+//                    object: includeSamples ? sample : nil
+//                ))
+//            }
+//
+//            objects.append((currentlyPaused, currentData))
+//            return WorkoutStatsSeries(sections: objects)
+//
+//        }) { (result) in
+//            switch result {
+//            case .success(let series):
+//                completion(series)
+//            case .failure:
+//                completion([])
+//            }
+//        }
     }
     
     // MARK: - Backup
@@ -322,3 +377,4 @@ extension DataManager {
         }
     }
 }
+

@@ -144,6 +144,54 @@ extension HealthStoreManager {
         }
     }
     
+    static func queryAnchoredHealthSteps<ReturnType>(of type: HKQuantityType, attachedTo healthWorkout: HKWorkout, resultHealthWorkout res: HealthWorkout, transform: @escaping (_ lastValue: ReturnType?, _ quantity: HKQuantity, _ dateInterval: DateInterval) -> ReturnType?) -> ReturnType? {
+        
+        var lastValue: ReturnType?
+
+        
+        gainAuthorisation(for: [type]) { authorisation, _ in
+            guard authorisation else {return}
+            
+            let predicate = HKAnchoredObjectQuery.predicateForObjects(from: healthWorkout)
+            let query = HKQuantitySeriesSampleQuery(quantityType: type, predicate: predicate) { query, quantity, dateInterval, _, done, error in
+                guard error == nil, let quantity = quantity, let dateInterval = dateInterval, let tranformedValue = transform(lastValue, quantity, dateInterval) else { return }
+                
+                lastValue = tranformedValue
+                res.steps = lastValue as! Int
+                guard done else { return }
+                HealthStoreManager.healthStore.stop(query)
+            }
+            
+            HealthStoreManager.healthStore.execute(query)
+        }
+        
+        return lastValue
+    }
+    
+    static func queryAnchoredHealthHeartRates<ReturnType>(of type: HKQuantityType, attachedTo healthWorkout: HKWorkout, resultHealthWorkout res: HealthWorkout, transform: @escaping (_ lastValue: ReturnType?, _ quantity: HKQuantity, _ dateInterval: DateInterval) -> ReturnType?) -> ReturnType? {
+        
+        var lastValue: ReturnType?
+
+        
+        gainAuthorisation(for: [type]) { authorisation, _ in
+            guard authorisation else {return}
+            
+            let predicate = HKAnchoredObjectQuery.predicateForObjects(from: healthWorkout)
+            let query = HKQuantitySeriesSampleQuery(quantityType: type, predicate: predicate) { query, quantity, dateInterval, _, done, error in
+                guard error == nil, let quantity = quantity, let dateInterval = dateInterval, let tranformedValue = transform(lastValue, quantity, dateInterval) else { return }
+                
+                lastValue = tranformedValue
+                res._heartRates = lastValue as! [TempV4.WorkoutHeartRateDataSample]
+                guard done else { return }
+                HealthStoreManager.healthStore.stop(query)
+            }
+            
+            HealthStoreManager.healthStore.execute(query)
+        }
+        
+        return lastValue
+    }
+    
     /**
      Queries health series data attached to the provided workout and tranforms it through a provided closure before returning it allowing for both commulative results and lists being returned.
      - parameter type: the type of data being queried
@@ -185,36 +233,34 @@ extension HealthStoreManager {
      - parameter healthRoute: the health workout the route is associated with
      - returns: the location data of the queried health workout
      */
-    static func queryAnchoredWorkoutRoute(attachedTo healthWorkout: HKWorkout) -> [CLLocation] {
+    static func queryAnchoredWorkoutRoute(attachedTo healthWorkout: HKWorkout, resultHealthWorkout res: HealthWorkout) -> [CLLocation] {
         
         var routeData = [CLLocation]()
-        let dispatchGroup = DispatchGroup()
-        dispatchGroup.enter()
+
         
-        gainAuthorisation(for: [HealthType.Route]) { authorisation, _ in
-            guard authorisation else { dispatchGroup.leave(); return }
+        gainAuthorisation(for: [HealthType.Workout, HealthType.Route]) { authorisation, _ in
+            guard authorisation else { return }
             
             queryHealthObjects(
                 of: HealthType.Route,
                 attachedTo: healthWorkout
             ) { routes, error in
-                guard let route = routes?.first as? HKWorkoutRoute else { dispatchGroup.leave(); return }
+                guard let route = routes?.first as? HKWorkoutRoute else { return }
                 
                 let query = HKWorkoutRouteQuery(route: route) { query, locations, done, error in
-                    guard let locations = locations else { dispatchGroup.leave(); return }
+                    guard let locations = locations else { return }
                     
                     routeData.append(contentsOf: locations)
                     
                     guard done else { return }
                     HealthStoreManager.healthStore.stop(query)
-                    dispatchGroup.leave()
+                    res._routeData = routeData.map { $0.asTemp }
                 }
                 
                 HealthStoreManager.healthStore.execute(query)
             }
         }
         
-        dispatchGroup.wait()
         return routeData
     }
     
@@ -238,3 +284,4 @@ extension HealthStoreManager {
         HealthStoreManager.healthStore.execute(query)
     }
 }
+

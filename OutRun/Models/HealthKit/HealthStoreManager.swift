@@ -80,7 +80,7 @@ class HealthStoreManager {
             
             if let error = error {
                 print("[Health] Error for health store authorisation:", error.localizedDescription)
-            } else if !success {
+            } else {
                 print("[Health] Unknown error for health store authorisation")
             }
             
@@ -532,16 +532,23 @@ class HealthStoreManager {
             return values
         }
         
-        let steps: Int? = queryAnchoredHealthSeriesData(of: HealthType.StepCount, attachedTo: hkWorkout, transform: stepsMapper)
-        let routeData: [CLLocation] = queryAnchoredWorkoutRoute(attachedTo: hkWorkout)
-        let heartRates: [TempWorkoutHeartRateDataSample] = queryAnchoredHealthSeriesData(
-            of: HealthType.HeartRate,  attachedTo: hkWorkout, transform: heartRateMapper) ?? []
-        
-        return HealthWorkout(
+        guard let resultHealthWorkout = HealthWorkout(
             hkWorkout,
-            steps: steps,
-            route: routeData,
-            heartRates: heartRates
-        )
+            steps: nil,
+            route: [CLLocation](),
+            heartRates: [TempWorkoutHeartRateDataSample]()
+        ) else {
+            return nil
+        }
+        
+        
+        let steps: Int? = queryAnchoredHealthSteps(of: HealthType.StepCount, attachedTo: hkWorkout, resultHealthWorkout: resultHealthWorkout, transform: stepsMapper)
+        let routeData: [CLLocation] = queryAnchoredWorkoutRoute(attachedTo: hkWorkout, resultHealthWorkout: resultHealthWorkout)
+        let heartRates: [TempWorkoutHeartRateDataSample] = queryAnchoredHealthHeartRates(
+            of: HealthType.HeartRate,  attachedTo: hkWorkout, resultHealthWorkout: resultHealthWorkout, transform: heartRateMapper) ?? []
+
+        return resultHealthWorkout;
+        
     }
 }
+
