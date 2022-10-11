@@ -21,13 +21,22 @@
 import UIKit
 import MapKit
 import CoreLocation
+import AMapFoundationKit
+import AMapLocationKit
 
 enum WorkoutMapViewManager {
     
     static func setupRoute(forWorkout workout: Workout, mapView: MKMapView, customEdgePadding: UIEdgeInsets = UIEdgeInsets(top: 40, left: 20, bottom: 40, right: 20), completion: @escaping () -> Void) {
+        
+//        AMapServices.shared().apiKey = "2c59f389d8e55b33a04f6c5ed1be2242";
         var route = MKPolyline()
+//        print(workout.routeData.coreStoreDumpString)
         let coordinates = workout.routeData.map({ (sample) -> CLLocationCoordinate2D in
-            CLLocationCoordinate2D(latitude: sample.latitude, longitude: sample.longitude)
+                        
+            let gpscoord = CLLocationCoordinate2D(latitude: sample.latitude, longitude: sample.longitude)
+            let amapcoord = AMapCoordinateConvert(gpscoord, AMapCoordinateType.GPS);
+            return amapcoord
+
         })
         route = MKPolyline(coordinates: coordinates, count: coordinates.count)
         mapView.delegate = WorkoutMapViewDelegate.standard

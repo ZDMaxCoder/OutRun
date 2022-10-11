@@ -25,12 +25,73 @@ class WorkoutMapViewDelegate: NSObject, MKMapViewDelegate {
     
     static let standard = WorkoutMapViewDelegate()
     
-    func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
-        let renderer = MKPolylineRenderer(overlay: overlay)
-        renderer.strokeColor = .accentColor
-        renderer.lineWidth = 8.0
+//    func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
+//        let renderer = MKPolylineRenderer(overlay: overlay)
+//        renderer.strokeColor = .accentColor
+//        renderer.lineWidth = 8.0
+//
+//        return renderer
+//    }
+    
+    func mapViewDidFinishLoadingMap(_ mapView: MKMapView) {
         
-        return renderer
+//        let cl = CLLocationCoordinate2D.init(latitude: 40.050868598090275, longitude: 116.3177281358507)
+//        let p = mapView.convert(cl, toPointTo: mapView)
+//        print("cl=",cl,"p=",p)
+        
+        let overlay = mapView.overlays[0];
+        let polyline = overlay as! MKPolyline
+        let mkmapPoints = polyline.points()
+                
+        var coordinates = [CLLocationCoordinate2D](repeating: kCLLocationCoordinate2DInvalid,
+                                                   count: polyline.pointCount)
+        polyline.getCoordinates(&coordinates, range: NSRange(location: 0, length: polyline.pointCount))
+        
+        
+
+//        for index in 0 ..< polyline.pointCount {
+//
+//            let mkmapPoint = mkmapPoints[index]
+//            let coordinate = coordinates[index]
+//            let cgpoint = mapView.convert(coordinate, toPointTo: mapView)
+//            print("mkmapPoint= \(mkmapPoint) ; coordinate=\(coordinate.longitude),\(coordinate.latitude); cgpoint=\(cgpoint)")
+//
+//        }
+        
+        
+        let cgpoints = coordinates.map({ (coord) -> CGPoint in
+                    print(coord)
+                    let cgpoint = mapView.convert(coord, toPointTo: mapView)
+                    print(cgpoint)
+                    return cgpoint
+                })
+        
+        let cgmutablePath = CGMutablePath()
+        cgmutablePath.addLines(between: cgpoints)
+        
+        let shapeLayer = CAShapeLayer()
+        shapeLayer.strokeColor = UIColor.red.cgColor
+        shapeLayer.fillColor = UIColor.clear.cgColor
+        shapeLayer.lineJoin = CAShapeLayerLineJoin.round
+        shapeLayer.path = cgmutablePath
+        
+        let animation = CABasicAnimation()
+        animation.keyPath = "strokeEnd"
+        animation.duration = 5
+        animation.fromValue = 0.0
+        animation.toValue = 1.0
+        animation.timingFunction = CAMediaTimingFunction.init(name: CAMediaTimingFunctionName.easeInEaseOut)
+        animation.fillMode = CAMediaTimingFillMode.forwards
+        animation.isRemovedOnCompletion = false
+        
+        shapeLayer.add(animation, forKey: "shape")
+        
+        
+        mapView.layer.addSublayer(shapeLayer)
+        
+        
     }
+
     
 }
+
