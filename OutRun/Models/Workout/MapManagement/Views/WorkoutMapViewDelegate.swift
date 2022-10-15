@@ -69,11 +69,11 @@ class WorkoutMapViewDelegate: NSObject, MKMapViewDelegate {
         let cgmutablePath = CGMutablePath()
         cgmutablePath.addLines(between: cgpoints)
         
-        let shapeLayer = CAShapeLayer()
-        shapeLayer.strokeColor = UIColor.red.cgColor
-        shapeLayer.fillColor = UIColor.clear.cgColor
-        shapeLayer.lineJoin = CAShapeLayerLineJoin.round
-        shapeLayer.path = cgmutablePath
+        let pathLayer = CAShapeLayer()
+        pathLayer.strokeColor = UIColor.red.cgColor
+        pathLayer.fillColor = UIColor.clear.cgColor
+        pathLayer.lineJoin = CAShapeLayerLineJoin.round
+        pathLayer.path = cgmutablePath
         
         let animation = CABasicAnimation()
         animation.keyPath = "strokeEnd"
@@ -84,10 +84,29 @@ class WorkoutMapViewDelegate: NSObject, MKMapViewDelegate {
         animation.fillMode = CAMediaTimingFillMode.forwards
         animation.isRemovedOnCompletion = false
         
-        shapeLayer.add(animation, forKey: "shape")
+        pathLayer.add(animation, forKey: "strokeEnd")
         
         
-        mapView.layer.addSublayer(shapeLayer)
+        let headImage = UIImage(systemName: "figure.outdoor.cycle")
+        let imageLayer = CALayer()
+        imageLayer.contents = headImage!.cgImage
+        imageLayer.anchorPoint = CGPointZero;
+        imageLayer.frame = CGRectMake(0.0, 0.0, headImage!.size.width, headImage!.size.height);
+        
+        pathLayer.addSublayer(imageLayer)
+        
+        let headAnimation = CAKeyframeAnimation()
+        headAnimation.keyPath = "position"
+        headAnimation.duration = 5
+        headAnimation.isRemovedOnCompletion = false
+        headAnimation.path = cgmutablePath;
+        headAnimation.calculationMode = CAAnimationCalculationMode.paced;
+//        headAnimation.delegate =
+        headAnimation.timingFunction = CAMediaTimingFunction.init(name: CAMediaTimingFunctionName.easeInEaseOut)
+
+        imageLayer.add(headAnimation, forKey: "position")
+        
+        mapView.layer.addSublayer(pathLayer)
         
         
     }
